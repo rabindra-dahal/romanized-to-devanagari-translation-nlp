@@ -1,37 +1,47 @@
 import torch
 from torch.nn.utils.rnn import pad_sequence
 from config import Config
+from tokenizers import Tokenizer
+from tokenizers.models import BPE
+from tokenizers.trainers import BpeTrainer
+from tokenizers.pre_tokenizers import WhitespaceSplit # Ensures words don't fragment into separated characters
 
-class WordVocabulary:
-    """Tokenizes whole words instead of breaking them into characters."""
-    def __init__(self, text_list):
-        # Extract unique words by splitting sentences on space characters
-        words = []
-        for text in text_list:
-            words.extend(text.split())
-            
-        self.itos = Config.SPECIAL_TOKENS + sorted(list(set(words)))
-        self.stoi = {word: i for i, word in enumerate(self.itos)}
+class SubwordVocabulary:
+    """Trains a tight local subword BPE tokenizer with word-boundary controls."""
+    def __init__(self, all_sentences):
+        # 1. Instantiate the BPE tracking model layout
+        self.tokenizer = Tokenizer(BPE(unk_token="<unk>"))
+        # Using WhitespaceSplit forces the engine to respect standard word blocks
+        self.tokenizer.pre_tokenizer = WhitespaceSplit()
+        
+        trainer = BpeTrainer(
+            special_tokens=["<pad>", "<sos>", "<eos>", "<unk>"],
+            vocab_size=1500  # Tight capacity keeps output linear matrices lightning fast
+        )
+        
+        # Train vocabulary mappings
+        self.tokenizer.train_from_iterator(all_sentences, trainer)
+        
+        Config.PAD_IDX = self.tokenizer.token_to_id("<pad>")
+        Config.SOS_IDX = self.tokenizer.token_to_id("<sos>")
+        Config.EOS_IDX = self.tokenizer.token_to_id("<eos>")
+        Config.UNK_IDX = self.tokenizer.token_to_id("<unk>")
         
     def __len__(self):
-        return len(self.itos)
+        return self.tokenizer.get_vocab_size()
         
     def encode(self, text):
-        # Split input sentence string into individual word components
-        tokens = text.split()
-        return [Config.SOS_IDX] + [self.stoi.get(w, Config.UNK_IDX) for w in tokens] + [Config.EOS_IDX]
+        encoded = self.tokenizer.encode(text)
+        return [Config.SOS_IDX] + encoded.ids + [Config.EOS_IDX]
         
     def decode(self, token_ids):
-        # Re-assemble predicted token indexes into a space-separated string sentence
-        words_list = []
-        for i in token_ids:
-            if i not in [Config.SOS_IDX, Config.EOS_IDX, Config.PAD_IDX]:
-                words_list.append(self.itos[i])
-        return ' '.join(words_list)
+        clean_ids = [idx for idx in token_ids if idx not in [Config.SOS_IDX, Config.EOS_IDX, Config.PAD_IDX]]
+        # Decodes token IDs back into unified, continuous space-separated strings
+        return self.tokenizer.decode(clean_ids)
 
-def build_batches(src_data, tgt_data, src_vocab, tgt_vocab):
-    src_tensors = [torch.tensor(src_vocab.encode(s)) for s in src_data]
-    tgt_tensors = [torch.tensor(tgt_vocab.encode(t)) for t in tgt_data]
+def build_batches(src_data, tgt_data, vocab):
+    src_tensors = [torch.tensor(vocab.encode(s)) for s in src_data]
+    tgt_tensors = [torch.tensor(vocab.encode(t)) for t in tgt_data]
 
     src_batch = pad_sequence(src_tensors, batch_first=True, padding_value=Config.PAD_IDX)
     tgt_batch = pad_sequence(tgt_tensors, batch_first=True, padding_value=Config.PAD_IDX)

@@ -1,22 +1,20 @@
 import torch
 
 class Config:
-    # --- Reduced Capacity to Stop Overfitting ---
-    D_MODEL = 64              # Reduced embedding size for word vectors
-    NHEAD = 2                 # Reduced parallel attention heads
-    NUM_ENCODER_LAYERS = 1    # Streamlined encoder depth
-    NUM_DECODER_LAYERS = 1    # Streamlined decoder depth
-    DIM_FEEDFORWARD = 128     # Tight linear hidden dimension
-    DROPOUT = 0.0
-    MAX_LEN = 20              # Max word count allowed during generation
-
-    # --- Optimized Learning Bounds ---
-    LR = 0.005                # Slightly faster learning rate for tiny vocabulary
-    DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    # --- Vocabulary Token Indices ---
+    # --- Structural Layout Dimensions ---
+    D_MODEL = 128             # Embedding state size
+    NHEAD = 4                 # Parallel attention heads
+    NUM_ENCODER_LAYERS = 2    # Balanced layer tracking bounds
+    NUM_DECODER_LAYERS = 2    
+    DIM_FEEDFORWARD = 256     
+    DROPOUT = 0.1             
+    
+    # --- Tightened Sequence Bound (Eliminates CPU Overhead) ---
+    MAX_LEN = 24              # Reduced from 50 to 24 to dramatically speed up CPU training
+    LR = 0.001                
+    DEVICE = torch.device('cpu') # Explicit CPU routing for platform safety
+    
     PAD_IDX = 0
-    UNK_IDX = 1
-    SOS_IDX = 2
-    EOS_IDX = 3
-    SPECIAL_TOKENS = ['<pad>', '<unk>', '<sos>', '<eos>']
+    SOS_IDX = 1
+    EOS_IDX = 2
+    UNK_IDX = 3
