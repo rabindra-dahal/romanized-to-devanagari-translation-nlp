@@ -6,9 +6,7 @@ def train_one_epoch(model, dataloader, criterion, optimizer):
     model.train()
     total_loss = 0
     
-    # Iterate over the smaller chunks provided by the DataLoader
     for src_batch, tgt_batch, src_mask, tgt_mask in dataloader:
-        # Move mini-batch tensors to the active hardware (CPU/GPU)
         src_batch = src_batch.to(Config.DEVICE)
         tgt_batch = tgt_batch.to(Config.DEVICE)
         src_mask = src_mask.to(Config.DEVICE)
@@ -16,51 +14,51 @@ def train_one_epoch(model, dataloader, criterion, optimizer):
         
         optimizer.zero_grad()
         
-        # Autoregressive shift for teacher forcing
         tgt_input = tgt_batch[:, :-1]
         tgt_expected = tgt_batch[:, 1:]
         current_tgt_mask = tgt_mask[:, :-1]
         
-        # Forward pass through the Transformer
         output = model(src_batch, tgt_input, src_mask, current_tgt_mask)
         
-        # Flatten outputs to calculate CrossEntropyLoss against the expected tokens
         loss = criterion(output.reshape(-1, output.shape[-1]), tgt_expected.reshape(-1))
-        
         loss.backward()
+        
+        # Protect weights against spiking gradient updates
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
         
         total_loss += loss.item()
         
-    # Return the average loss across all mini-batches in this epoch
     return total_loss / len(dataloader)
 
 def evaluate_translation(model, sentence, src_vocab, tgt_vocab):
-    """Translates a sentence character-by-character using greedy decoding."""
+    """Translates a sentence character-by-character using clean evaluation tracking."""
     model.eval()
     
-    # Encode input sentence and add batch dimension [1, seq_len]
     src_tokens = torch.tensor([src_vocab.encode(sentence)]).to(Config.DEVICE)
     src_mask = (src_tokens == Config.PAD_IDX).to(Config.DEVICE)
     
-    # Initialize the decoder target with the Start of Sequence token
     tgt_tokens = [Config.SOS_IDX]
     
     with torch.no_grad():
         for _ in range(Config.MAX_LEN):
             tgt_tensor = torch.tensor([tgt_tokens]).to(Config.DEVICE)
-            tgt_mask = (tgt_tensor == Config.PAD_IDX).to(Config.DEVICE)
+            # Crucial: During step-by-step inference generation, we are not passing 
+            # padding blocks to our decoder, so our key tracking mask should be completely False.
+            tgt_mask = torch.zeros_like(tgt_tensor, dtype=torch.bool).to(Config.DEVICE)
             
-            # Predict the next character distributions
             output = model(src_tokens, tgt_tensor, src_mask, tgt_mask)
             
-            # Pick the absolute highest probability character index at the last position
+            # Isolate the exact trailing token projection probabilities
             next_token = output[0, -1].argmax().item()
             
-            # Stop if the model emits End of Sequence
             if next_token == Config.EOS_IDX:
                 break
                 
             tgt_tokens.append(next_token)
+            
+            # Safety brake: Stop generation if it gets trapped in an infinite loop
+            if len(tgt_tokens) > len(sentence) * 3 + 5:
+                break
             
     return tgt_vocab.decode(tgt_tokens)

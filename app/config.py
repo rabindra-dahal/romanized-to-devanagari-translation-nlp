@@ -1,25 +1,22 @@
 import torch
 
 class Config:
-    # --- Architecture Dimensions ---
-    D_MODEL = 256             # Hidden state size (dimensionality of token embeddings)
-    NHEAD = 4                 # Number of Parallel Attention Heads in multi-head attention
-    NUM_ENCODER_LAYERS = 3    # Number of stacked TransformerEncoder layers
-    NUM_DECODER_LAYERS = 3    # Number of stacked TransformerDecoder layers
-    DIM_FEEDFORWARD = 512     # Size of the hidden linear layer within feed-forward blocks
-    DROPOUT = 0.1             # Regularization probability to randomly deactivate nodes
-    MAX_LEN = 100             # Maximum sentence token limit allowed during prediction
+    # --- Reduced Capacity to Stop Overfitting ---
+    D_MODEL = 64              # Reduced embedding size for word vectors
+    NHEAD = 2                 # Reduced parallel attention heads
+    NUM_ENCODER_LAYERS = 1    # Streamlined encoder depth
+    NUM_DECODER_LAYERS = 1    # Streamlined decoder depth
+    DIM_FEEDFORWARD = 128     # Tight linear hidden dimension
+    DROPOUT = 0.0
+    MAX_LEN = 20              # Max word count allowed during generation
 
-    # --- Training Configuration ---
-    LR = 0.001                # Optimization step multiplier (Adam Learning Rate)
-    EPOCHS = 100              # Total complete passes through the dataset
-    BATCH_SIZE = 2            # Number of parallel sample strings processed per step
-    # Select hardware accelerator if available; fallback safely to CPU
+    # --- Optimized Learning Bounds ---
+    LR = 0.005                # Slightly faster learning rate for tiny vocabulary
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # --- Vocabulary Token Indices ---
-    PAD_IDX = 0               # Index used to fill empty space in unequal sentences
-    UNK_IDX = 1               # Index used when text contains an out-of-vocabulary item
-    SOS_IDX = 2               # Index marking the literal absolute start of a sequence
-    EOS_IDX = 3               # Index telling the system a sentence has finished
-    SPECIAL_TOKENS = ['<pad>', '<unk>', '<sos>', '<eos>'] # Literal vocabulary strings
+    PAD_IDX = 0
+    UNK_IDX = 1
+    SOS_IDX = 2
+    EOS_IDX = 3
+    SPECIAL_TOKENS = ['<pad>', '<unk>', '<sos>', '<eos>']
